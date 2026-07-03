@@ -1,8 +1,8 @@
 package framework.servlet;
 
 import java.io.IOException;
-import framework.init.Initializer;
 import java.lang.reflect.Method;
+
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
 import jakarta.servlet.ServletConfig;
@@ -16,8 +16,12 @@ public class FrontControllerServlet extends HttpServlet {
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
 
-        Initializer initializer = new Initializer(config);
-        this.routeRegistry = initializer.getRouteRegistry();
+        this.routeRegistry = (RouteRegistry)
+                config.getServletContext().getAttribute("routeRegistry");
+
+        if (routeRegistry == null) {
+            throw new ServletException("RouteRegistry introuvable.");
+        }
     }
 
     @Override
