@@ -1,6 +1,7 @@
 package framework.servlet;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
 import jakarta.servlet.ServletConfig;
@@ -40,22 +41,23 @@ public class FrontControllerServlet extends HttpServlet {
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String url = normalizeUrl(request);
-        RouteDefinition handler = routeRegistry.find(url);
+        String httpMethod = request.getMethod();
+        RouteDefinition handler = routeRegistry.find(url, httpMethod);
 
         if (handler == null) {
-            writeUnknownRoute(response, url);
+            writeUnknownRoute(response, url, httpMethod);
             return;
         }
 
         writeRouteInfo(response, handler);
     }
 
-    private void writeUnknownRoute(HttpServletResponse response, String url) throws IOException {
+    private void writeUnknownRoute(HttpServletResponse response, String url, String httpMethod) throws IOException {
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         response.setContentType("text/plain; charset=UTF-8");
 
         StringBuilder builder = new StringBuilder();
-        builder.append("Aucune methode associee a l'URL : ").append(url).append("\n\n");
+        builder.append("Aucune methode associee a l'URL : ").append(httpMethod).append(" ").append(url).append("\n\n");
         builder.append("Routes disponibles :\n");
         for (String route : routeRegistry.describeRoutes()) {
             builder.append("- ").append(route).append('\n');
@@ -66,6 +68,7 @@ public class FrontControllerServlet extends HttpServlet {
 
     private void writeRouteInfo(HttpServletResponse response, RouteDefinition handler) throws IOException {
         response.setContentType("text/plain; charset=UTF-8");
+        response.getWriter().println("HTTP Method : " + handler.getHttpMethod());
         response.getWriter().println("URL : " + handler.getPath());
         response.getWriter().println("Controller : " + handler.getControllerClass().getName());
         response.getWriter().println("Methode : " + handler.getMethod().getName());
