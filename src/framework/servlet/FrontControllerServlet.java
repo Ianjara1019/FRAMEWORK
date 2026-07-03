@@ -1,6 +1,7 @@
 package framework.servlet;
 
 import java.io.IOException;
+import framework.init.Initializer;
 import java.lang.reflect.Method;
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
@@ -14,16 +15,9 @@ public class FrontControllerServlet extends HttpServlet {
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
-        String packageToScan = config.getInitParameter("scanPackage");
 
-        if (packageToScan == null || packageToScan.trim().isEmpty()) {
-            throw new ServletException("Le paramètre 'scanPackage' est manquant dans le web.xml");
-        }
-        try {
-            this.routeRegistry = new RouteRegistry(packageToScan);
-        } catch (Exception e) {
-            throw new ServletException("Erreur lors du chargement des routes", e);
-        }
+        Initializer initializer = new Initializer(config);
+        this.routeRegistry = initializer.getRouteRegistry();
     }
 
     @Override
