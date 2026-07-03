@@ -12,7 +12,7 @@ import framework.annotation.UrlMapping;
 import framework.utils.AnnotationScanner;
 
 public class RouteRegistry {
-    private final Map<String, RouteDefinition> routes = new LinkedHashMap<>();
+    private final Map<UrlMethod, UrlMappingMethod> routes = new LinkedHashMap<>();
 
     public RouteRegistry(String packageToScan) {
         List<Class<?>> controllers = AnnotationScanner.findAnnotatedClasses(packageToScan, Controller.class,
@@ -21,19 +21,30 @@ public class RouteRegistry {
     }
 
     public RouteDefinition find(String url) {
-        return routes.get(normalizePath(url));
+        UrlMappingMethod mapping = routes.get(new UrlMethod(normalizePath(url), "ANY"));
+        if (mapping == null) {
+            return null;
+        }
+        return mapping.findAny();
+    }
+
+    public RouteDefinition find(String url, String method) {
+        UrlMappingMethod mapping = routes.get(new UrlMethod(normalizePath(url), method));
+        return mapping == null ? null : mapping.find(method);
     }
 
     public List<String> describeRoutes() {
         List<String> descriptions = new ArrayList<>();
-        for (RouteDefinition route : routes.values()) {
-            descriptions.add(describeRoute(route));
+        for (UrlMappingMethod mapping : routes.values()) {
+            for (RouteDefinition route : mapping.getRouteDefinitions()) {
+                descriptions.add(describeRoute(route));
+            }
         }
         return descriptions;
     }
 
     public String describeRoute(RouteDefinition route) {
-        return route.getPath() + " -> " + route.getControllerClass().getName() + "#"
+        return route.getHttpMethod() + " " + route.getPath() + " -> " + route.getControllerClass().getName() + "#"
                 + route.getMethod().getName();
     }
 
@@ -44,17 +55,35 @@ public class RouteRegistry {
                     continue;
                 }
 
-                String path = normalizePath(method.getAnnotation(UrlMapping.class).value());
-                if (routes.containsKey(path)) {
-                    RouteDefinition existing = routes.get(path);
+                UrlMapping mapping = method.getAnnotation(UrlMapping.class);
+                String path = normalizePath(resolveUrl(mapping));
+                String httpMethod = normalizeMethod(mapping.method());
+                UrlMethod key = new UrlMethod(path, httpMethod);
+                UrlMappingMethod mappingMethod = routes.computeIfAbsent(key, ignored -> new UrlMappingMethod(path));
+                if (mappingMethod.containsMethod(httpMethod)) {
+                    RouteDefinition existing = mappingMethod.find(httpMethod);
                     throw new IllegalStateException("Doublon de mapping URL : " + path + " ("
                             + existing.getControllerClass().getName() + "#" + existing.getMethod().getName() + " et "
                             + controllerClass.getName() + "#" + method.getName() + ")");
                 }
 
-                routes.put(path, new RouteDefinition(path, controllerClass, method));
+                mappingMethod.add(new RouteDefinition(path, httpMethod, controllerClass, method));
             }
         }
+    }
+
+    private String resolveUrl(UrlMapping mapping) {
+        if (mapping == null) {
+            return "/";
+        }
+
+        if (mapping.url() != null && !mapping.url().isBlank()) {
+            return mapping.url();
+        }
+        if (mapping.value() != null && !mapping.value().isBlank()) {
+            return mapping.value();
+        }
+        return "/";
     }
 
     private String normalizePath(String path) {
@@ -70,5 +99,12 @@ public class RouteRegistry {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
+    }
+
+    private String normalizeMethod(String method) {
+        if (method == null || method.isBlank()) {
+            return "ANY";
+        }
+        return method.trim().toUpperCase();
     }
 }
