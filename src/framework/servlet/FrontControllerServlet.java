@@ -49,7 +49,7 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        writeRouteInfo(response, handler);
+        invokeMethod(response, handler);
     }
 
     private void writeUnknownRoute(HttpServletResponse response, String url, String httpMethod) throws IOException {
@@ -66,12 +66,30 @@ public class FrontControllerServlet extends HttpServlet {
         response.getWriter().print(builder.toString());
     }
 
-    private void writeRouteInfo(HttpServletResponse response, RouteDefinition handler) throws IOException {
-        response.setContentType("text/plain; charset=UTF-8");
-        response.getWriter().println("HTTP Method : " + handler.getHttpMethod());
-        response.getWriter().println("URL : " + handler.getPath());
-        response.getWriter().println("Controller : " + handler.getControllerClass().getName());
-        response.getWriter().println("Methode : " + handler.getMethod().getName());
+    private void invokeMethod(HttpServletResponse response, RouteDefinition handler) throws IOException {
+        try {
+            response.setContentType("text/plain; charset=UTF-8");
+
+            Object controller = handler.getControllerClass().getDeclaredConstructor().newInstance();
+
+            Method method = handler.getMethod();
+            method.setAccessible(true);
+
+            Object result = method.invoke(controller);
+
+            response.getWriter().println("Methode invoquee avec succes!");
+            response.getWriter().println("HTTP Method : " + handler.getHttpMethod());
+            response.getWriter().println("URL : " + handler.getPath());
+            response.getWriter().println("Controller : " + handler.getControllerClass().getName());
+            response.getWriter().println("Methode : " + handler.getMethod().getName());
+            if (result != null) {
+                response.getWriter().println("Resultat : " + result.toString());
+            }
+        } catch (Exception e) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().println("Erreur lors de l'invocation de la methode : " + e.getMessage());
+            e.printStackTrace(response.getWriter());
+        }
     }
 
     private String normalizeUrl(HttpServletRequest request) {
