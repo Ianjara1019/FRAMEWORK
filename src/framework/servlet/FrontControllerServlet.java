@@ -5,16 +5,22 @@ import java.lang.reflect.Method;
 
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
+import framework.view.ModelAndView;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 
 public class FrontControllerServlet extends HttpServlet {
     private RouteRegistry routeRegistry;
+    private String viewPrefix;
+    private String viewSuffix;
 
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
+
+        this.viewPrefix = resolveInitParam(config, "prefix", "/WEB-INF/views/");
+        this.viewSuffix = resolveInitParam(config, "suffix", ".jsp");
 
         this.routeRegistry = (RouteRegistry)
                 config.getServletContext().getAttribute("routeRegistry");
@@ -47,7 +53,7 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        invokeMethod(response, handler);
+        invokeMethod(request, response, handler);
     }
 
     private void writeUnknownRoute(HttpServletResponse response, String url, String httpMethod) throws IOException {
@@ -64,10 +70,9 @@ public class FrontControllerServlet extends HttpServlet {
         response.getWriter().print(builder.toString());
     }
 
-    private void invokeMethod(HttpServletResponse response, RouteDefinition handler) throws IOException {
+    private void invokeMethod(HttpServletRequest request, HttpServletResponse response, RouteDefinition handler)
+            throws IOException, ServletException {
         try {
-            response.setContentType("text/plain; charset=UTF-8");
-
             Object controller = handler.getControllerClass().getDeclaredConstructor().newInstance();
 
             Method method = handler.getMethod();
@@ -75,6 +80,17 @@ public class FrontControllerServlet extends HttpServlet {
 
             Object result = method.invoke(controller);
 
+            if (result instanceof ModelAndView modelAndView) {
+                renderView(request, response, modelAndView);
+                return;
+            }
+
+            if (result instanceof String viewName) {
+                renderView(request, response, new ModelAndView(viewName));
+                return;
+            }
+
+            response.setContentType("text/plain; charset=UTF-8");
             response.getWriter().println("Methode invoquee avec succes!");
             response.getWriter().println("HTTP Method : " + handler.getHttpMethod());
             response.getWriter().println("URL : " + handler.getPath());
@@ -88,6 +104,26 @@ public class FrontControllerServlet extends HttpServlet {
             response.getWriter().println("Erreur lors de l'invocation de la methode : " + e.getMessage());
             e.printStackTrace(response.getWriter());
         }
+    }
+
+    private void renderView(HttpServletRequest request, HttpServletResponse response, ModelAndView modelAndView)
+            throws ServletException, IOException {
+        modelAndView.getModel().forEach(request::setAttribute);
+        String viewPath = buildViewPath(modelAndView.getViewName());
+        request.getRequestDispatcher(viewPath).forward(request, response);
+    }
+
+    private String buildViewPath(String viewName) {
+        String normalizedViewName = viewName == null ? "" : viewName.trim();
+        if (normalizedViewName.startsWith("/")) {
+            normalizedViewName = normalizedViewName.substring(1);
+        }
+        return viewPrefix + normalizedViewName + viewSuffix;
+    }
+
+    private String resolveInitParam(ServletConfig config, String name, String defaultValue) {
+        String value = config.getInitParameter(name);
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     private String normalizeUrl(HttpServletRequest request) {
