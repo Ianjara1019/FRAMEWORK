@@ -3,6 +3,8 @@ package framework.servlet;
 import java.io.IOException;
 import java.lang.reflect.Method;
 
+import framework.annotation.ApiRest;
+import tools.jackson.databind.ObjectMapper;
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
 import framework.view.ModelAndView;
@@ -80,6 +82,11 @@ public class FrontControllerServlet extends HttpServlet {
 
             Object result = method.invoke(controller);
 
+            if (method.isAnnotationPresent(ApiRest.class)) {
+                writeJsonResponse(response, result);
+                return;
+            }
+
             if (result instanceof ModelAndView modelAndView) {
                 renderView(request, response, modelAndView);
                 return;
@@ -104,6 +111,23 @@ public class FrontControllerServlet extends HttpServlet {
             response.getWriter().println("Erreur lors de l'invocation de la methode : " + e.getMessage());
             e.printStackTrace(response.getWriter());
         }
+    }
+
+    private void writeJsonResponse(HttpServletResponse response, Object result) throws IOException {
+        response.setContentType("application/json; charset=UTF-8");
+
+        if (result == null) {
+            response.getWriter().write("null");
+            return;
+        }
+
+        if (result instanceof String jsonString) {
+            response.getWriter().write(jsonString);
+            return;
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+        response.getWriter().write(mapper.writeValueAsString(result));
     }
 
     private void renderView(HttpServletRequest request, HttpServletResponse response, ModelAndView modelAndView)
