@@ -77,11 +77,11 @@ public class RouteRegistry {
             return "/";
         }
 
-        if (mapping.url() != null && !mapping.url().isBlank()) {
-            return mapping.url();
-        }
         if (mapping.value() != null && !mapping.value().isBlank()) {
             return mapping.value();
+        }
+        if (mapping.url() != null && !mapping.url().isBlank()) {
+            return mapping.url();
         }
         return "/";
     }
