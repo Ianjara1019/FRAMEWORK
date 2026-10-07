@@ -2,6 +2,7 @@ package framework.servlet;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 
 import framework.annotation.ApiRest;
 import tools.jackson.databind.ObjectMapper;
@@ -80,7 +81,7 @@ public class FrontControllerServlet extends HttpServlet {
             Method method = handler.getMethod();
             method.setAccessible(true);
 
-            Object result = method.invoke(controller);
+            Object result = method.invoke(controller, resolveMethodArguments(method, request, response));
 
             if (method.isAnnotationPresent(ApiRest.class)) {
                 writeJsonResponse(response, result);
@@ -128,6 +129,26 @@ public class FrontControllerServlet extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
         response.getWriter().write(mapper.writeValueAsString(result));
+    }
+
+    private Object[] resolveMethodArguments(Method method, HttpServletRequest request,
+            HttpServletResponse response) throws ServletException {
+        Parameter[] parameters = method.getParameters();
+        Object[] arguments = new Object[parameters.length];
+
+        for (int index = 0; index < parameters.length; index++) {
+            Class<?> parameterType = parameters[index].getType();
+            if (parameterType == HttpServletRequest.class) {
+                arguments[index] = request;
+            } else if (parameterType == HttpServletResponse.class) {
+                arguments[index] = response;
+            } else {
+                throw new ServletException("Parametre non supporte dans " + method.getName() + ": "
+                        + parameterType.getName());
+            }
+        }
+
+        return arguments;
     }
 
     private void renderView(HttpServletRequest request, HttpServletResponse response, ModelAndView modelAndView)
