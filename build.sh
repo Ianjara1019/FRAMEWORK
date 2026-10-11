@@ -14,7 +14,7 @@ mkdir -p bin
 
 echo "=== [FRAMEWORK] 2. Compilation ==="
 find src -name "*.java" > sources.txt
-javac -cp "$TOMCAT_LIB:$JACKSON_DATABIND:$JACKSON_CORE:$JACKSON_ANNOTATIONS" -d bin @sources.txt
+javac -parameters -cp "$TOMCAT_LIB:$JACKSON_DATABIND:$JACKSON_CORE:$JACKSON_ANNOTATIONS" -d bin @sources.txt
 rm sources.txt
 
 echo "=== [FRAMEWORK] 3. Création du JAR ==="
