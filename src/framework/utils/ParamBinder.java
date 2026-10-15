@@ -1,17 +1,24 @@
 package framework.utils;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
+import framework.annotation.FileParam;
+import framework.multipart.UploadedFile;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
 
 public final class ParamBinder {
 
@@ -26,8 +33,11 @@ public final class ParamBinder {
         for (int index = 0; index < parameters.length; index++) {
             Parameter parameter = parameters[index];
             Class<?> parameterType = parameter.getType();
+            FileParam fileParam = parameter.getAnnotation(FileParam.class);
 
-            if (parameterType == HttpServletRequest.class) {
+            if (fileParam != null) {
+                arguments[index] = bindFiles(fileParam.value(), request);
+            } else if (parameterType == HttpServletRequest.class) {
                 arguments[index] = request;
             } else if (parameterType == HttpServletResponse.class) {
                 arguments[index] = response;
@@ -39,6 +49,34 @@ public final class ParamBinder {
         }
 
         return arguments;
+    }
+
+    private static List<UploadedFile> bindFiles(String fieldName, HttpServletRequest request)
+            throws ServletException {
+        try {
+            List<UploadedFile> files = new ArrayList<>();
+            for (Part part : request.getParts()) {
+                String submittedFileName = part.getSubmittedFileName();
+                if (!fieldName.equals(part.getName()) || submittedFileName == null || submittedFileName.isBlank()) {
+                    continue;
+                }
+
+                String originalName = Paths.get(submittedFileName).getFileName().toString();
+                byte[] bytes = part.getInputStream().readAllBytes();
+                files.add(new UploadedFile(originalName, extractExtension(originalName), part.getContentType(), bytes));
+            }
+            return files;
+        } catch (IOException | IllegalStateException e) {
+            throw new ServletException("Impossible de lire les fichiers envoyes", e);
+        }
+    }
+
+    private static String extractExtension(String filename) {
+        int dotIndex = filename.lastIndexOf('.');
+        if (dotIndex <= 0 || dotIndex == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(dotIndex + 1).toLowerCase();
     }
 
     private static Object bindObject(Class<?> targetType, Map<String, String[]> parameterMap)
