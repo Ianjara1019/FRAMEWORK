@@ -81,8 +81,7 @@ public class FrontControllerServlet extends HttpServlet {
             Method method = handler.getMethod();
             method.setAccessible(true);
 
-                Object result = method.invoke(controller,
-                    ParamBinder.resolveArguments(method, request.getParameterMap(), request, response));
+            Object result = method.invoke(controller, ParamBinder.resolveArguments(method, request.getParameterMap(), request, response));
 
             if (method.isAnnotationPresent(ApiRest.class)) {
                 writeJsonResponse(response, result);
