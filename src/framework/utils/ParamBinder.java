@@ -9,9 +9,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+import framework.session.MySession;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 public final class ParamBinder {
 
@@ -31,6 +33,10 @@ public final class ParamBinder {
                 arguments[index] = request;
             } else if (parameterType == HttpServletResponse.class) {
                 arguments[index] = response;
+            } else if (parameterType == HttpSession.class) {
+                arguments[index] = request.getSession();
+            } else if (parameterType == MySession.class) {
+                arguments[index] = new MySession(request.getSession());
             } else if (isSimpleType(parameterType)) {
                 arguments[index] = convert(firstValue(parameterMap, parameter.getName()), parameterType);
             } else {
