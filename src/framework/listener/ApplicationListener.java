@@ -9,6 +9,10 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
+
 public class ApplicationListener implements ServletContextListener {
 
     @Override
@@ -51,5 +55,24 @@ public class ApplicationListener implements ServletContextListener {
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
         System.out.println("Application arrêtée.");
+    }
+
+    private void configureUploadStorage(ServletContext context) throws IOException {
+        Properties properties = new Properties();
+
+        try (InputStream input = context.getResourceAsStream("/WEB-INF/application.properties")) {
+            if (input != null) {
+                properties.load(input);
+            }
+        }
+
+        String configuredPath = properties.getProperty("upload.storage.path");
+        String storagePath = configuredPath == null || configuredPath.isBlank()
+                ? Paths.get(System.getProperty("java.io.tmpdir"), "framework-uploads").toString()
+                : configuredPath.trim();
+
+        Path uploadDirectory = Paths.get(storagePath).toAbsolutePath().normalize();
+        Files.createDirectories(uploadDirectory);
+        context.setAttribute("uploadStoragePath", uploadDirectory.toString());
     }
 }
