@@ -28,6 +28,7 @@ public class ApplicationListener implements ServletContextListener {
             // Stocker dans le contexte
             context.setAttribute("routeRegistry", registry);
             context.setAttribute("uploadStoragePath", properties.getProperty("upload.storage.path"));
+            context.setAttribute("sessionAuthKey", properties.getProperty("session.auth.key")); // ← NEW
 
             System.out.println("Routes chargées avec succès.");
         } catch (Exception e) {
@@ -38,17 +39,28 @@ public class ApplicationListener implements ServletContextListener {
     private Properties loadProperties(ServletContext context) throws IOException {
         Properties properties = new Properties();
         try (InputStream input = context.getResourceAsStream("/WEB-INF/application.properties")) {
-            if (input == null) {
-                throw new IOException("Fichier /WEB-INF/application.properties introuvable");
+            if (input != null) {
+                properties.load(input);
             }
-            properties.load(input);
+        }
+        catch (IOException e) {
+            throw new IOException("Erreur lors du chargement du fichier de propriétés", e);
         }
 
+        // upload
         String storagePath = properties.getProperty("upload.storage.path");
         if (storagePath == null || storagePath.isBlank()) {
-            throw new IOException("La propriété upload.storage.path est obligatoire");
+            storagePath = Paths.get(System.getProperty("java.io.tmpdir"), "framework-uploads").toString();
         }
         properties.setProperty("upload.storage.path", storagePath.trim());
+
+        // session auth
+        String authKey = properties.getProperty("session.auth.key");
+        if (authKey == null || authKey.isBlank()) {
+            authKey = "authentifie"; // valeur par défaut
+        }
+        properties.setProperty("session.auth.key", authKey.trim());
+
         return properties;
     }
 
