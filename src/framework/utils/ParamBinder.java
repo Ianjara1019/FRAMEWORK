@@ -20,6 +20,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Part;
 
+import jakarta.servlet.http.HttpSession;
+import framework.session.MySession;
+
 public final class ParamBinder {
 
     private ParamBinder() {
@@ -41,6 +44,10 @@ public final class ParamBinder {
                 arguments[index] = request;
             } else if (parameterType == HttpServletResponse.class) {
                 arguments[index] = response;
+            } else if (parameterType == HttpSession.class) {
+                arguments[index] = request.getSession();
+            } else if (parameterType == MySession.class) {
+                arguments[index] = new MySession(request.getSession());
             } else if (isSimpleType(parameterType)) {
                 arguments[index] = convert(firstValue(parameterMap, parameter.getName()), parameterType);
             } else {

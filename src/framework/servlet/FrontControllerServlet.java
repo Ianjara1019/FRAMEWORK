@@ -7,6 +7,7 @@ import framework.annotation.ApiRest;
 import tools.jackson.databind.ObjectMapper;
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
+import framework.session.MySession;
 import framework.utils.ParamBinder;
 import framework.view.ModelAndView;
 import jakarta.servlet.ServletConfig;
@@ -80,9 +81,14 @@ public class FrontControllerServlet extends HttpServlet {
 
             Method method = handler.getMethod();
             method.setAccessible(true);
+            Object[] arguments = ParamBinder.resolveArguments(method, request.getParameterMap(), request, response);
+            Object result;
 
-                Object result = method.invoke(controller,
-                    ParamBinder.resolveArguments(method, request.getParameterMap(), request, response));
+            try {
+                result = method.invoke(controller, arguments);
+            } finally {
+                synchronizeSessions(arguments);
+            }
 
             if (method.isAnnotationPresent(ApiRest.class)) {
                 writeJsonResponse(response, result);
@@ -112,6 +118,18 @@ public class FrontControllerServlet extends HttpServlet {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             response.getWriter().println("Erreur lors de l'invocation de la methode : " + e.getMessage());
             e.printStackTrace(response.getWriter());
+        }
+    }
+
+    private void synchronizeSessions(Object[] arguments) {
+        for (Object argument : arguments) {
+            if (argument instanceof MySession mySession) {
+                try {
+                    mySession.synchronize();
+                } catch (IllegalStateException ignored) {
+                    // The action may have invalidated the session intentionally.
+                }
+            }
         }
     }
 
