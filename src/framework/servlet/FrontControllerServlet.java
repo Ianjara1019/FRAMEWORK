@@ -95,12 +95,10 @@ public class FrontControllerServlet extends HttpServlet {
             Method method = handler.getMethod();
             Class<?> controllerClass = handler.getControllerClass();
 
-            // ===== NEW (sprint 10) : contrôle d'authentification =====
             if (requiresAuthentication(method, controllerClass) && !isAuthenticated(request)) {
                 handleUnauthenticated(request, response, method);
                 return;
             }
-            // ========================================================
 
             Object controller = controllerClass.getDeclaredConstructor().newInstance();
             method.setAccessible(true);
@@ -144,8 +142,6 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    // ===== NEW (sprint 10) : helpers d'authentification =====
-
     private boolean requiresAuthentication(Method method, Class<?> controllerClass) {
         return method.isAnnotationPresent(Authentified.class)
                 || controllerClass.isAnnotationPresent(Authentified.class);
@@ -162,8 +158,6 @@ public class FrontControllerServlet extends HttpServlet {
 
     private void handleUnauthenticated(HttpServletRequest request, HttpServletResponse response, Method method)
             throws IOException {
-        // Pour une API : 401 JSON. Pour une vue : 401 texte.
-        // (Si tu as une page de login, tu peux remplacer la branche "vue" par un sendRedirect.)
         if (method.isAnnotationPresent(ApiRest.class)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json; charset=UTF-8");
@@ -175,14 +169,7 @@ public class FrontControllerServlet extends HttpServlet {
         response.setContentType("text/plain; charset=UTF-8");
         response.getWriter().println("Authentification requise.");
         response.getWriter().println("Clé de session attendue : " + sessionAuthKey);
-
-        // Variante redirection (décommente si tu veux rediriger vers /login) :
-        // String target = request.getRequestURI();
-        // response.sendRedirect(request.getContextPath() + "/login?redirect="
-        //         + URLEncoder.encode(target, StandardCharsets.UTF_8));
     }
-
-    // ========================================================
 
     private void synchronizeSessions(Object[] arguments) {
         for (Object argument : arguments) {
@@ -190,7 +177,6 @@ public class FrontControllerServlet extends HttpServlet {
                 try {
                     mySession.synchronize();
                 } catch (IllegalStateException ignored) {
-                    // session invalidée volontairement
                 }
             }
         }
@@ -213,8 +199,7 @@ public class FrontControllerServlet extends HttpServlet {
     private void renderView(HttpServletRequest request, HttpServletResponse response, ModelAndView modelAndView)
             throws ServletException, IOException {
         String viewName = modelAndView.getViewName();
-
-        // NEW : support "redirect:/..." (nécessaire pour /login → POST → GET)
+        
         if (viewName != null && viewName.startsWith("redirect:")) {
             String target = viewName.substring("redirect:".length());
             response.sendRedirect(request.getContextPath() + target);
