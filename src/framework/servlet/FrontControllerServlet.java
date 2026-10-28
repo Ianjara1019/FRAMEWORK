@@ -2,11 +2,10 @@ package framework.servlet;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import framework.annotation.ApiRest;
 import framework.annotation.Authentified;
+import framework.annotation.Role;
 import framework.routing.RouteDefinition;
 import framework.routing.RouteRegistry;
 import framework.session.MySession;
@@ -14,7 +13,10 @@ import framework.utils.ParamBinder;
 import framework.view.ModelAndView;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import tools.jackson.databind.ObjectMapper;
 
 public class FrontControllerServlet extends HttpServlet {
@@ -23,6 +25,7 @@ public class FrontControllerServlet extends HttpServlet {
     private String viewPrefix;
     private String viewSuffix;
     private String sessionAuthKey;
+    private String sessionRoleKey;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -37,11 +40,15 @@ public class FrontControllerServlet extends HttpServlet {
             throw new ServletException("RouteRegistry introuvable.");
         }
 
-        // NEW (sprint 10) : clé de session configurable, exposée par ApplicationListener
         Object authKey = config.getServletContext().getAttribute("sessionAuthKey");
         this.sessionAuthKey = (authKey == null || authKey.toString().isBlank())
                 ? "authentifie"
                 : authKey.toString();
+
+        Object roleKey = config.getServletContext().getAttribute("sessionRoleKey");
+        this.sessionRoleKey = (roleKey == null || roleKey.toString().isBlank())
+                ? "role"
+                : roleKey.toString();
     }
 
     @Override
@@ -58,7 +65,6 @@ public class FrontControllerServlet extends HttpServlet {
 
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // Encodage UTF-8 avant tout getParameter()
         if (request.getCharacterEncoding() == null) {
             request.setCharacterEncoding("UTF-8");
         }
@@ -97,6 +103,11 @@ public class FrontControllerServlet extends HttpServlet {
 
             if (requiresAuthentication(method, controllerClass) && !isAuthenticated(request)) {
                 handleUnauthenticated(request, response, method);
+                return;
+            }
+
+            if (!isAuthorized(method, controllerClass, request)) {
+                handleForbidden(response, method);
                 return;
             }
 
@@ -152,8 +163,7 @@ public class FrontControllerServlet extends HttpServlet {
         if (session == null) {
             return false;
         }
-        Object value = session.getAttribute(sessionAuthKey);
-        return value != null;
+        return session.getAttribute(sessionAuthKey) != null;
     }
 
     private void handleUnauthenticated(HttpServletRequest request, HttpServletResponse response, Method method)
@@ -164,11 +174,60 @@ public class FrontControllerServlet extends HttpServlet {
             response.getWriter().write("{\"error\":\"unauthorized\",\"reason\":\"missing session key\"}");
             return;
         }
-
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("text/plain; charset=UTF-8");
         response.getWriter().println("Authentification requise.");
         response.getWriter().println("Clé de session attendue : " + sessionAuthKey);
+    }
+
+    private boolean isAuthorized(Method method, Class<?> controllerClass, HttpServletRequest request) {
+        String[] requiredRoles = resolveRequiredRoles(method, controllerClass);
+        if (requiredRoles.length == 0) {
+            return true;
+        }
+
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return false;
+        }
+
+        Object rawRole = session.getAttribute(sessionRoleKey);
+        if (rawRole == null) {
+            return false;
+        }
+
+        String userRole = rawRole.toString();
+        for (String required : requiredRoles) {
+            if (required.equalsIgnoreCase(userRole)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String[] resolveRequiredRoles(Method method, Class<?> controllerClass) {
+        Role methodRole = method.getAnnotation(Role.class);
+        if (methodRole != null) {
+            return methodRole.value();
+        }
+        Role classRole = controllerClass.getAnnotation(Role.class);
+        if (classRole != null) {
+            return classRole.value();
+        }
+        return new String[0];
+    }
+
+    private void handleForbidden(HttpServletResponse response, Method method) throws IOException {
+        if (method.isAnnotationPresent(ApiRest.class)) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json; charset=UTF-8");
+            response.getWriter().write("{\"error\":\"forbidden\",\"reason\":\"insufficient role\"}");
+            return;
+        }
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("text/plain; charset=UTF-8");
+        response.getWriter().println("Accès refusé : rôle insuffisant.");
+        response.getWriter().println("Clé de rôle attendue : " + sessionRoleKey);
     }
 
     private void synchronizeSessions(Object[] arguments) {
@@ -199,7 +258,7 @@ public class FrontControllerServlet extends HttpServlet {
     private void renderView(HttpServletRequest request, HttpServletResponse response, ModelAndView modelAndView)
             throws ServletException, IOException {
         String viewName = modelAndView.getViewName();
-        
+
         if (viewName != null && viewName.startsWith("redirect:")) {
             String target = viewName.substring("redirect:".length());
             response.sendRedirect(request.getContextPath() + target);
