@@ -9,11 +9,10 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.Files;
-
 public class ApplicationListener implements ServletContextListener {
+    private static final String DEFAULT_SESSION_AUTH_KEY = "authentifie";
+    private static final String DEFAULT_SESSION_ROLE_KEY = "role";
+    private static final String PROPERTIES_FILE = "/WEB-INF/application.properties";
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
@@ -21,16 +20,23 @@ public class ApplicationListener implements ServletContextListener {
             ServletContext context = sce.getServletContext();
 
             String packageToScan = context.getInitParameter("scanPackage");
+            if (packageToScan == null || packageToScan.isBlank()) {
+                throw new IllegalStateException("Le paramètre 'scanPackage' est obligatoire dans web.xml");
+            }
 
             RouteRegistry registry = new RouteRegistry(packageToScan);
             Properties properties = loadProperties(context);
 
-            // Stocker dans le contexte
             context.setAttribute("routeRegistry", registry);
             context.setAttribute("uploadStoragePath", properties.getProperty("upload.storage.path"));
-            context.setAttribute("sessionAuthKey", properties.getProperty("session.auth.key")); // ← NEW
+            context.setAttribute("sessionAuthKey", properties.getProperty("session.auth.key"));
+            context.setAttribute("sessionRoleKey", properties.getProperty("session.role.key"));
 
             System.out.println("Routes chargées avec succès.");
+            System.out.println("  scanPackage       = " + packageToScan);
+            System.out.println("  uploadStoragePath = " + properties.getProperty("upload.storage.path"));
+            System.out.println("  sessionAuthKey    = " + properties.getProperty("session.auth.key"));
+            System.out.println("  sessionRoleKey    = " + properties.getProperty("session.role.key"));
         } catch (Exception e) {
             throw new RuntimeException("Erreur lors du chargement des routes", e);
         }
@@ -38,28 +44,33 @@ public class ApplicationListener implements ServletContextListener {
 
     private Properties loadProperties(ServletContext context) throws IOException {
         Properties properties = new Properties();
-        try (InputStream input = context.getResourceAsStream("/WEB-INF/application.properties")) {
-            if (input != null) {
+
+        try (InputStream input = context.getResourceAsStream(PROPERTIES_FILE)) {
+            if (input == null) {
+                System.err.println("ATTENTION: " + PROPERTIES_FILE
+                        + " introuvable, utilisation des valeurs par défaut.");
+            } else {
                 properties.load(input);
             }
         }
-        catch (IOException e) {
-            throw new IOException("Erreur lors du chargement du fichier de propriétés", e);
-        }
 
-        // upload
         String storagePath = properties.getProperty("upload.storage.path");
         if (storagePath == null || storagePath.isBlank()) {
-            storagePath = Paths.get(System.getProperty("java.io.tmpdir"), "framework-uploads").toString();
+            storagePath = System.getProperty("java.io.tmpdir") + "/framework-uploads";
         }
         properties.setProperty("upload.storage.path", storagePath.trim());
 
-        // session auth
         String authKey = properties.getProperty("session.auth.key");
         if (authKey == null || authKey.isBlank()) {
-            authKey = "authentifie"; // valeur par défaut
+            authKey = DEFAULT_SESSION_AUTH_KEY;
         }
         properties.setProperty("session.auth.key", authKey.trim());
+
+        String roleKey = properties.getProperty("session.role.key");
+        if (roleKey == null || roleKey.isBlank()) {
+            roleKey = DEFAULT_SESSION_ROLE_KEY;
+        }
+        properties.setProperty("session.role.key", roleKey.trim());
 
         return properties;
     }
@@ -67,24 +78,5 @@ public class ApplicationListener implements ServletContextListener {
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
         System.out.println("Application arrêtée.");
-    }
-
-    private void configureUploadStorage(ServletContext context) throws IOException {
-        Properties properties = new Properties();
-
-        try (InputStream input = context.getResourceAsStream("/WEB-INF/application.properties")) {
-            if (input != null) {
-                properties.load(input);
-            }
-        }
-
-        String configuredPath = properties.getProperty("upload.storage.path");
-        String storagePath = configuredPath == null || configuredPath.isBlank()
-                ? Paths.get(System.getProperty("java.io.tmpdir"), "framework-uploads").toString()
-                : configuredPath.trim();
-
-        Path uploadDirectory = Paths.get(storagePath).toAbsolutePath().normalize();
-        Files.createDirectories(uploadDirectory);
-        context.setAttribute("uploadStoragePath", uploadDirectory.toString());
     }
 }
