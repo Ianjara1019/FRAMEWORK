@@ -18,6 +18,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import tools.jackson.databind.ObjectMapper;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 public class FrontControllerServlet extends HttpServlet {
 
@@ -27,6 +29,7 @@ public class FrontControllerServlet extends HttpServlet {
     private String sessionAuthKey;
     private String sessionRoleKey;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Map<Class<?>, Object> controllers = new ConcurrentHashMap<>();
 
     @Override
     public void init(ServletConfig config) throws ServletException {
@@ -49,6 +52,17 @@ public class FrontControllerServlet extends HttpServlet {
         this.sessionRoleKey = (roleKey == null || roleKey.toString().isBlank())
                 ? "role"
                 : roleKey.toString();
+        
+        for (Class<?> controllerClass : routeRegistry.getControllerClasses()) {
+            try {
+                Object instance = controllerClass.getDeclaredConstructor().newInstance();
+                controllers.put(controllerClass, instance);
+            } catch (ReflectiveOperationException e) {
+                throw new ServletException(
+                    "Impossible d'instancier le controller " + controllerClass.getName()
+                    + " (constructeur sans argument requis)", e);
+            }
+        }
     }
 
     @Override
@@ -111,7 +125,12 @@ public class FrontControllerServlet extends HttpServlet {
                 return;
             }
 
-            Object controller = controllerClass.getDeclaredConstructor().newInstance();
+            // Object controller = controllerClass.getDeclaredConstructor().newInstance();
+            Object controller = controllers.get(handler.getControllerClass());
+            if (controller == null) {
+                throw new ServletException(
+                    "Controller non initialisé : " + handler.getControllerClass().getName());
+            }
             method.setAccessible(true);
             Object[] arguments = ParamBinder.resolveArguments(method, request.getParameterMap(), request, response);
             Object result;

@@ -48,6 +48,16 @@ public class RouteRegistry {
                 + route.getMethod().getName();
     }
 
+    public java.util.Set<Class<?>> getControllerClasses() {
+        java.util.Set<Class<?>> classes = new java.util.LinkedHashSet<>();
+        for (UrlMappingMethod mapping : routes.values()) {
+            for (RouteDefinition def : mapping.getRouteDefinitions()) {
+                classes.add(def.getControllerClass());
+            }
+        }
+        return classes;
+    }
+
     private void registerRoutes(List<Class<?>> controllers) {
         for (Class<?> controllerClass : controllers) {
             for (Method method : controllerClass.getDeclaredMethods()) {
